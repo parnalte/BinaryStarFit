@@ -13,6 +13,10 @@ Basically, taken directly from Wright&Howard (2009)
 import numpy as np
 import scipy.optimize as so
 
+import astropy.units as u
+import astropy.coordinates as coord
+from astropy.time import Time
+
 RAD2DEG = 180./np.pi
 DEG2RAD = 1./RAD2DEG
 
@@ -316,3 +320,258 @@ def compute_orbit_secondary(tvals, angle_O_deg, angle_w_deg_prim, angle_i_deg,
         orbit_displ_ra[i] = B*X + G*Y
         
     return orbit_displ_dec, orbit_displ_ra
+
+# FUNCTIONS NEEDED TO DESCRIBE THE MOTION OF THE CENTRE OF MASS OF THE SYSTEM
+    
+def _compute_propmotion_lin(tvals, mu_alpha, mu_delta, t_ref):
+    """
+    Function to compute the term corresponding to the proper motion of the
+    system assuming a simple linear model.
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        mu_alpha: linear proper motion in the rigth ascencion direction
+            [arcsec/year]
+        mu_delta: linear proper motion in the declination direction
+            [arcsec/year]
+        t_ref: time taken as reference (where proper motion is defined to be
+            zero) [years]
+        
+    OUTPUT:
+        pm_delta: astrometric displacements of the CoM of the system due to
+            the proper motion in the declination direction [arcsec]
+        pm_alpha: astrometric displacements of the CoM of the system due to
+            the proper motion in the right ascention direction, in the
+            appropriate rectilinear coordinates [arcsec]
+        
+    """
+    pm_delta = mu_delta*(tvals - t_ref)
+    pm_alpha = mu_alpha*(tvals - t_ref)
+
+    return pm_delta, pm_alpha
+
+
+def get_parallax_factors(tvals, skycoords_nominal, ephemeris='de430'):
+    """
+    Function to obtain the $\Pi_{\alpha}$, $\Pi_{\delta}$ parallax factors
+    of the system at the given time values.
+    
+    These factors are computed following eqs. (53,54) of Wright&Howard, and
+    represent the astrometric displacements due to parallax in each direction.
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        skycoords_nominal: nominal coordinates of the system
+            [astropy.coordinates.SkyCoord object]
+        ephemeris: name of the JPL ephemerides database to use to obtain the
+            needed ICRS positions of the Earth. Default and recommended is
+            'de430', which will need a download of ~115MB of data the first
+            time this is executed in a system. For other options, see
+            Astropy's help page:
+            http://docs.astropy.org/en/stable/coordinates/solarsystem.html
+            
+    OUTPUT:
+        Par_factor_dec: parallax factor (relative astrometric displacement)
+            in the declination direction  [technically, AU]
+        Par_factor_ra: parallax factor (relative astrometric displacement)
+            in the right ascension direction [technically, AU]
+    """
+    
+    # Obtain the cartesian representation of Earth's position in the
+    # barycentric ICRS coordinates at the needed times
+    earth_cartesian_repr = \
+        coord.get_body_barycentric(body='earth',
+                                   time=Time(tvals, format='decimalyear'),
+                                   ephemeris=ephemeris)
+        
+    # Convert coordinates in units of AU to appropriate numpy array 
+    earth_r = earth_cartesian_repr.xyz.to(u.AU).value
+    
+    sin_ra = np.sin(skycoords_nominal.ra)
+    cos_ra = np.cos(skycoords_nominal.ra)
+    sin_dec = np.sin(skycoords_nominal.dec)
+    cos_dec = np.cos(skycoords_nominal.dec)
+    
+    Par_factor_ra = earth_r[0]*sin_ra - earth_r[1]*cos_ra
+    Par_factor_dec = \
+        (earth_r[0]*cos_ra + earth_r[1]*sin_ra)*sin_dec - earth_r[2]*cos_dec
+    
+    return Par_factor_dec, Par_factor_ra
+
+
+def compute_com_motion(tvals, pi_parallax, mu_propmotion, rel_pos_ref,
+                       parall_factors, t_ref):
+    """
+    Function to compute the positions of the centre of mass of the system at
+    the given times.
+    
+    We compute the corresponding astrometric displacements in the appropriate
+    projected rectilinear coordinate system used in Wright&Howard with respect
+    to the nominal coordinates.
+    
+    The displacements computed contain three terms:
+        * Proper motion term
+        * Displacements due to the parallax
+        * Change in the position of the CoM at the reference time with respect
+            to the nominal coordinates
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
+        mu_propmotion=(mu_delta, mu_alpha): linear proper motion of the system
+            in each of the directions (DEC, RA) [arcsec]
+        rel_pos_ref=(Ddec, Dra): reference position of the CoM of the system
+            in the projected rectilinear coordinates, with respect to the
+            nominal coordinates. The reference position is the position at
+            the t_ref, if there were no parallax displacements [arcsec]
+        parall_factors=(Pfactor_dec, Pfactor_ra): parallax factors
+            corresponding to the times tvals, in each of the directions
+            (DEC, RA) [technically, AU]
+        t_ref: time taken as reference (where proper motion is defined to be
+            zero) [years]
+        
+    OUTPUT:
+        com_pos_delta: astrometric displacements of the CoM of the system
+            in the declination direction [arcsec]
+        com_pos_alpha: astrometric displacements of the CoM of the system
+            in the right ascention direction, in the appropriate rectilinear
+            coordinates [arcsec]
+    """
+    
+    mu_delta, mu_alpha = mu_propmotion
+    Ddec, Dra = rel_pos_ref
+    Pfactor_dec, Pfactor_ra = parall_factors
+    
+    prop_motion_dec, prop_motion_ra = _compute_propmotion_lin(tvals, mu_alpha,
+                                                              mu_delta, t_ref)
+    
+    parallax_dec = pi_parallax*Pfactor_dec
+    parallax_ra = pi_parallax*Pfactor_ra
+    
+    com_pos_delta = prop_motion_dec + parallax_dec + Ddec
+    com_pos_alpha = prop_motion_ra + parallax_ra + Dra
+    
+    return com_pos_delta, com_pos_alpha
+
+    
+# PUT EVERYTHING TOGETHER TO COMPUTE THE TOTAL ABSOLUTE MOTION OF EACH OF THE STARS
+    
+def compute_total_motion_primary(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
+                                 a_axis, eccentricity, period, T0, pi_parallax,
+                                 mu_propmotion, rel_pos_ref, parall_factors,
+                                 t_ref):
+    """
+    Function to compute the absolute position of the primary star at the
+    given times, taking into account both the motion of the centre of mass,
+    and the orbit.
+    
+    Basically, this is just a wrapper over compute_orbit_primary and 
+    compute_com_motion.
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        angle_O_deg: position angle of the ascending node [degrees]
+        angle_w_deg: argument of periastron of the primary star [degrees]
+        angle_i_deg: inclination of the orbit with respect to the sky [degrees]
+        a_axis: semi-major axis of the primary star's orbit [arcsec]
+        eccentricity: eccentricity of orbit
+        period: period of the orbit [years, or other consistent units]
+        T0: time of periastron passage [years, or other consistent units]
+                pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
+        mu_propmotion=(mu_delta, mu_alpha): linear proper motion of the system
+            in each of the directions (DEC, RA) [arcsec]
+        rel_pos_ref=(Ddec, Dra): reference position of the CoM of the system
+            in the projected rectilinear coordinates, with respect to the
+            nominal coordinates. The reference position is the position at
+            the t_ref, if there were no parallax displacements [arcsec]
+        parall_factors=(Pfactor_dec, Pfactor_ra): parallax factors
+            corresponding to the times tvals, in each of the directions
+            (DEC, RA) [technically, AU]
+        t_ref: time taken as reference (where proper motion is defined to be
+            zero) [years]
+    
+    OUTPUT:
+        abs_pos_delta: absolute astrometric displacements of the primary star
+            in the declination direction [arcsec]
+        abs_pos_alpha: absolute astrometric displacements of the primary star
+            in the right ascention direction, in the appropriate rectilinear
+            coordinates [arcsec]
+    """
+    
+    com_pos_delta, com_pos_alpha = \
+        compute_com_motion(tvals, pi_parallax, mu_propmotion, rel_pos_ref,
+                           parall_factors, t_ref)
+        
+    rel_orbit_pos_delta, rel_orbit_pos_alpha = \
+        compute_orbit_primary(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
+                              a_axis, eccentricity, period, T0)
+        
+    abs_pos_delta = rel_orbit_pos_delta + com_pos_delta
+    abs_pos_alpha = rel_orbit_pos_alpha + com_pos_alpha
+    
+    return abs_pos_delta, abs_pos_alpha
+
+
+def compute_total_motion_secondary(tvals, angle_O_deg, angle_w_deg_prim,
+                                   angle_i_deg, a_axis_prim, eccentricity,
+                                   period, T0, q_mass, pi_parallax,
+                                   mu_propmotion, rel_pos_ref, parall_factors,
+                                   t_ref):
+    """
+    Function to compute the absolute position of the secondary star at the
+    given times, taking into account both the motion of the centre of mass,
+    and the orbit.
+    
+    Basically, this is just a wrapper over compute_orbit_secondary and 
+    compute_com_motion.
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        angle_O_deg: position angle of the ascending node [degrees]
+        angle_w_deg_prim: argument of periastron of the primary star [degrees]
+        angle_i_deg: inclination of the orbit with respect to the sky [degrees]
+        a_axis_prim: semi-major axis of the primary star's orbit [arcsec]
+        eccentricity: eccentricity of orbit
+        period: period of the orbit [years, or other consistent units]
+        T0: time of periastron passage [years, or other consistent units]
+                pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
+        q_mass: mass ratio of the two stars, m_secondary/m_primary
+        mu_propmotion=(mu_delta, mu_alpha): linear proper motion of the system
+            in each of the directions (DEC, RA) [arcsec]
+        rel_pos_ref=(Ddec, Dra): reference position of the CoM of the system
+            in the projected rectilinear coordinates, with respect to the
+            nominal coordinates. The reference position is the position at
+            the t_ref, if there were no parallax displacements [arcsec]
+        parall_factors=(Pfactor_dec, Pfactor_ra): parallax factors
+            corresponding to the times tvals, in each of the directions
+            (DEC, RA) [technically, AU]
+        t_ref: time taken as reference (where proper motion is defined to be
+            zero) [years]
+    
+    OUTPUT:
+        abs_pos_delta: absolute astrometric displacements of the secondary star
+            in the declination direction [arcsec]
+        abs_pos_alpha: absolute astrometric displacements of the secondary star
+            in the right ascention direction, in the appropriate rectilinear
+            coordinates [arcsec]
+    """
+    
+    com_pos_delta, com_pos_alpha = \
+        compute_com_motion(tvals, pi_parallax, mu_propmotion, rel_pos_ref,
+                           parall_factors, t_ref)
+        
+    rel_orbit_pos_delta, rel_orbit_pos_alpha = \
+        compute_orbit_secondary(tvals, angle_O_deg, angle_w_deg_prim,
+                                angle_i_deg, a_axis_prim, eccentricity,
+                                period, T0, q_mass)
+        
+    abs_pos_delta = rel_orbit_pos_delta + com_pos_delta
+    abs_pos_alpha = rel_orbit_pos_alpha + com_pos_alpha
+    
+    return abs_pos_delta, abs_pos_alpha
+    
+    
+    
+    
+    
+    
