@@ -17,6 +17,8 @@ RAD2DEG = 180./np.pi
 DEG2RAD = 1./RAD2DEG
 
 
+# FUNCTIONS NEEDED FOR THE COMPUTATION OF THE ORBIT OF THE PRIMARY STAR
+
 def _get_ThieleInnes_from_params(a, angle_O_deg, angle_w_deg, angle_i_deg):
     """
     Compute the Thiele-Innes parameters A, B, F, G needed for the orbit 
@@ -162,6 +164,151 @@ def compute_orbit_primary(tvals, angle_O_deg, angle_w_deg, angle_i_deg, a_axis,
     
     A, B, F, G = _get_ThieleInnes_from_params(a_axis, angle_O_deg, angle_w_deg,
                                              angle_i_deg)
+    
+    for i,t in enumerate(tvals):
+        X, Y = _get_XY_from_time(t, eccentricity, period, T0)
+        orbit_displ_dec[i] = A*X + F*Y
+        orbit_displ_ra[i] = B*X + G*Y
+        
+    return orbit_displ_dec, orbit_displ_ra
+
+
+
+# FUNCTIONS NEEDED FOR THE COMPUTATION OF THE ORBIT OF THE SECONDARY STAR,
+# AND THE RELATIVE ORBIT
+
+def _get_ThieleInnes_from_params_secondary(a_prim, angle_O_deg,
+                                           angle_w_deg_prim, angle_i_deg,
+                                           q_mass):
+    """
+    Compute the Thiele-Innes parameters A, B, F, G needed for the orbit 
+    calculation of the secondary star from the *primary star's* orbit
+    parameters, and the mass ratio.
+    
+    INPUT:
+        a_prim: semi-major axis of the primary star's orbit [arcsec]
+        angle_O_deg: position angle of the ascending node [degrees]
+        angle_w_deg_prim: argument of periastron of the primary star [degrees]
+        angle_i_deg: inclination of the orbit with respect to the sky [degrees]
+        q_mass: mass ratio of the two stars, m_secondary/m_primary
+        
+    OUTPUT:
+        A, B, F, G: corresponding Thiele-Innes parameters for the orbit of the
+            secondary star
+    """
+    
+    a = a_prim/q_mass
+    
+    sin_O = np.sin(angle_O_deg*DEG2RAD)
+    cos_O = np.cos(angle_O_deg*DEG2RAD)
+    sin_w = -np.sin(angle_w_deg_prim*DEG2RAD) # w_sec = w_prim + pi
+    cos_w = -np.cos(angle_w_deg_prim*DEG2RAD) # w_sec = w_prim + pi
+    cos_i = np.cos(angle_i_deg*DEG2RAD)
+    
+    TIpar_A = a*( (cos_O*cos_w) - (sin_O*sin_w*cos_i) )
+    TIpar_B = a*( (sin_O*cos_w) + (cos_O*sin_w*cos_i) )
+    TIpar_F = a*( (-cos_O*sin_w) - (sin_O*cos_w*cos_i) )
+    TIpar_G = a*( (-sin_O*sin_w) + (cos_O*cos_w*cos_i) )
+    
+    return TIpar_A, TIpar_B, TIpar_F, TIpar_G
+
+
+def compute_relative_orbit(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
+                                 a_axis, eccentricity, period, T0, q_mass):
+    """
+    Function to compute the relative astrometric displacements between the
+    primary and the secondary star due to the orbit, for several time values,
+    given the orbit's parameters, and the mass ratio between the two stars.
+    
+    The results I compute here are the displacements, in the DEC and RA
+    directions, of the primary's position with respect to the secondary, in the
+    appropriate projected rectilinear coordinate system (i.e. that used in
+    Wright&Howard).
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        angle_O_deg: position angle of the ascending node [degrees]
+        angle_w_deg: argument of periastron of the primary star [degrees]
+        angle_i_deg: inclination of the orbit with respect to the sky [degrees]
+        a_axis: semi-major axis of the primary star's orbit [arcsec]
+        eccentricity: eccentricity of orbit
+        period: period of the orbit [years, or other consistent units]
+        T0: time of periastron passage [years, or other consistent units]
+        q_mass: mass ratio of the two stars, m_secondary/m_primary
+
+    OUTPUT:
+        relorbit_displ_dec: relative astrometric displacement of the primary
+            star with respect to the secondary in the declination direction
+            [arcsec]
+        relorbit_displ_ra: relative astrometric displacement of the primary
+            star with respect to the secondary in the right ascention
+            direction, in the appropriate rectilinear coordinates (i.e. taking
+            into account the cos(delta) term using the nominal delta value)
+            [arcsec]
+    """
+    
+    tvals = np.atleast_1d(tvals)
+    Nt = len(tvals)
+    relorbit_displ_dec = np.empty(Nt)
+    relorbit_displ_ra = np.empty(Nt)
+    
+    # Primary
+    A, B, F, G = _get_ThieleInnes_from_params(a_axis, angle_O_deg, angle_w_deg,
+                                              angle_i_deg)
+    # Secondary
+    A_sec, B_sec, F_sec, G_sec = \
+        _get_ThieleInnes_from_params_secondary(a_axis, angle_O_deg, angle_w_deg,
+                                              angle_i_deg, q_mass)
+        
+    for i,t in enumerate(tvals):
+        X, Y = _get_XY_from_time(t, eccentricity, period, T0)
+        relorbit_displ_dec[i] = A*X + F*Y - (A_sec*X + F_sec*Y)
+        relorbit_displ_ra[i] = B*X + G*Y - (B_sec*X + G_sec*Y)
+        
+    return relorbit_displ_dec, relorbit_displ_ra
+
+
+def compute_orbit_secondary(tvals, angle_O_deg, angle_w_deg_prim, angle_i_deg,
+                            a_axis_prim, eccentricity, period, T0, q_mass):
+    """
+    Function to compute the astrometric displacements for the secondary due to
+    the orbit, for several time values, given the *primary's orbit* parameters,
+    and the mass ratio.
+    
+    The results I compute here are the displacements, in the DEC and RA
+    directions, with respect to the centre of mass of the system, in the
+    appropriate projected rectilinear coordinate system (i.e. that used in
+    Wright&Howard).
+    
+    INPUT:
+        tvals: times, either single value or array [years]
+        angle_O_deg: position angle of the ascending node [degrees]
+        angle_w_deg_prim: argument of periastron of the primary star [degrees]
+        angle_i_deg: inclination of the orbit with respect to the sky [degrees]
+        a_axis_prim: semi-major axis of the primary star's orbit [arcsec]
+        eccentricity: eccentricity of orbit
+        period: period of the orbit [years, or other consistent units]
+        T0: time of periastron passage [years, or other consistent units]
+        q_mass: mass ratio of the two stars, m_secondary/m_primary
+
+    OUTPUT:
+        orbit_displ_dec: astrometric displacement of the secondary star with
+            respect to the CoM in the declination direction [arcsec]
+        orbit_displ_ra: astrometric displacement of the secondary star with
+            respect to the CoM in the right ascention direction, in the
+            appropriate rectilinear coordinates (i.e. taking into account the
+            cos(delta) term using the nominal delta value)  [arcsec]
+    """
+    
+    tvals = np.atleast_1d(tvals)
+    Nt = len(tvals)
+    orbit_displ_dec = np.empty(Nt)
+    orbit_displ_ra = np.empty(Nt)
+    
+    A, B, F, G = \
+        _get_ThieleInnes_from_params_secondary(a_axis_prim, angle_O_deg,
+                                               angle_w_deg_prim, angle_i_deg,
+                                               q_mass)
     
     for i,t in enumerate(tvals):
         X, Y = _get_XY_from_time(t, eccentricity, period, T0)
