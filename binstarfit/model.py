@@ -477,7 +477,7 @@ def compute_total_motion_primary(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
         eccentricity: eccentricity of orbit
         period: period of the orbit [years, or other consistent units]
         T0: time of periastron passage [years, or other consistent units]
-                pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
+        pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
         mu_propmotion=(mu_delta, mu_alpha): linear proper motion of the system
             in each of the directions (DEC, RA) [arcsec]
         rel_pos_ref=(Ddec, Dra): reference position of the CoM of the system
@@ -534,7 +534,7 @@ def compute_total_motion_secondary(tvals, angle_O_deg, angle_w_deg_prim,
         eccentricity: eccentricity of orbit
         period: period of the orbit [years, or other consistent units]
         T0: time of periastron passage [years, or other consistent units]
-                pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
+        pi_parallax: parallax of the system [arcsec, technically arcsec/AU]
         q_mass: mass ratio of the two stars, m_secondary/m_primary
         mu_propmotion=(mu_delta, mu_alpha): linear proper motion of the system
             in each of the directions (DEC, RA) [arcsec]
