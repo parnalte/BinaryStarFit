@@ -221,7 +221,7 @@ def compute_relative_orbit(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
     given the orbit's parameters, and the mass ratio between the two stars.
     
     The results I compute here are the displacements, in the DEC and RA
-    directions, of the primary's position with respect to the secondary, in the
+    directions, of the secondary's position with respect to the primary, in the
     appropriate projected rectilinear coordinate system (i.e. that used in
     Wright&Howard).
     
@@ -237,11 +237,11 @@ def compute_relative_orbit(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
         q_mass: mass ratio of the two stars, m_secondary/m_primary
 
     OUTPUT:
-        relorbit_displ_dec: relative astrometric displacement of the primary
-            star with respect to the secondary in the declination direction
+        relorbit_displ_dec: relative astrometric displacement of the secondary
+            star with respect to the primary in the declination direction
             [arcsec]
-        relorbit_displ_ra: relative astrometric displacement of the primary
-            star with respect to the secondary in the right ascention
+        relorbit_displ_ra: relative astrometric displacement of the secondary
+            star with respect to the primary in the right ascention
             direction, in the appropriate rectilinear coordinates (i.e. taking
             into account the cos(delta) term using the nominal delta value)
             [arcsec]
@@ -262,8 +262,8 @@ def compute_relative_orbit(tvals, angle_O_deg, angle_w_deg, angle_i_deg,
         
     for i,t in enumerate(tvals):
         X, Y = _get_XY_from_time(t, eccentricity, period, T0)
-        relorbit_displ_dec[i] = A*X + F*Y - (A_sec*X + F_sec*Y)
-        relorbit_displ_ra[i] = B*X + G*Y - (B_sec*X + G_sec*Y)
+        relorbit_displ_dec[i] = A_sec*X + F_sec*Y - (A*X + F*Y)
+        relorbit_displ_ra[i] = B_sec*X + G_sec*Y - (B*X + G*Y)
         
     return relorbit_displ_dec, relorbit_displ_ra
 
