@@ -12,7 +12,7 @@ sampling, ...)
 import numpy as np
 import scipy.stats as st
 
-import model
+from binstarfit import model
 
 
 # List containing the names (keys) of all the parameters to be used.
