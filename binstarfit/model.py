@@ -387,10 +387,10 @@ def get_parallax_factors(tvals, skycoords_nominal, ephemeris='de430'):
     # Convert coordinates in units of AU to appropriate numpy array 
     earth_r = earth_cartesian_repr.xyz.to(u.AU).value
     
-    sin_ra = np.sin(skycoords_nominal.ra)
-    cos_ra = np.cos(skycoords_nominal.ra)
-    sin_dec = np.sin(skycoords_nominal.dec)
-    cos_dec = np.cos(skycoords_nominal.dec)
+    sin_ra = np.sin(skycoords_nominal.ra).value
+    cos_ra = np.cos(skycoords_nominal.ra).value
+    sin_dec = np.sin(skycoords_nominal.dec).value
+    cos_dec = np.cos(skycoords_nominal.dec).value
     
     Par_factor_ra = earth_r[0]*sin_ra - earth_r[1]*cos_ra
     Par_factor_dec = \
