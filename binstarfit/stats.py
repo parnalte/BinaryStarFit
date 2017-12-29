@@ -245,3 +245,110 @@ def lnlikelihood(theta, ref_time, data_abs_primary,
         chi2_rel = chi2_rel_delta + chi2_rel_alpha
         
     return -0.5*(chi2_abs + chi2_sec + chi2_rel)
+
+
+def generate_initial_positions(ntemps, nwalkers, ref_time, fit_qm=False,
+                               prior_params=prior_params_default, rseed=None):
+    """
+    Function to generate initial positions for the walkers in the parameter
+    space following the prior distribution (see doc for lnprior function).
+    
+    The output of this function should have the format needed to work as
+    starting point for the PTSampler.
+    
+    INPUT:
+        ntemps, nwalkers: number of 'temperatures' and 'walkers' to be used
+            by the PTSampler
+        ref_time: reference time, used to define the prior on T0 [years]
+        fit_qm: whether we are fitting for the mass ratio q_m or not
+        prior_params: dictionary containing the optional parameters for some
+            of the model parameters (should be defined as prior_params_default)
+        rseed: optional seed to initialize the random number generator
+        
+    OUTPUT:
+        p0: array of shape (ntemps, nwalkers, ndim) with the generated
+            positions. ndim=13 if fit_qm=True, and ndim=12 if fit_qm=False.
+    """
+    
+    if rseed is not None:
+        np.random.seed(rseed)
+    
+    par_list = []
+    
+    # Omega
+    par_list.append(st.uniform.rvs(loc=0, scale=180,
+                                   size=(nwalkers, ntemps)))
+
+    # omega
+    par_list.append(st.uniform.rvs(loc=-180, scale=360,
+                                   size=(nwalkers, ntemps)))
+    
+    # i
+    par_list.append(st.uniform.rvs(loc=0, scale=90,
+                                   size=(nwalkers, ntemps)))
+    
+    # a
+    par_list.append(st.halfnorm.rvs(size=(nwalkers, ntemps),
+                                    **prior_params['a_axis']))
+    
+    # ecc
+    par_list.append(st.uniform.rvs(loc=0, scale=1, size=(nwalkers, ntemps)))
+    
+    # period, T0
+    period = st.uniform.rvs(size=(nwalkers, ntemps), **prior_params['period'])
+    T0 = np.array([st.uniform.rvs(loc=ref_time, scale=p, size=1)
+                  for p in period.flatten()]).reshape((nwalkers, ntemps))
+    par_list.append(period)
+    par_list.append(T0)
+
+    # mu_delta
+    par_list.append(st.norm.rvs(size=(nwalkers, ntemps),
+                                **prior_params['mu_delta']))
+    
+    # mu_alpha
+    par_list.append(st.norm.rvs(size=(nwalkers, ntemps),
+                                **prior_params['mu_alpha']))
+    
+    # pi_parallax
+    par_list.append(st.halfnorm.rvs(size=(nwalkers, ntemps),
+                                    **prior_params['pi_p']))
+    
+    # Ddelta_ref
+    par_list.append(st.norm.rvs(size=(nwalkers, ntemps),
+                                **prior_params['Ddelta_ref']))
+    
+    # Dalpha_ref
+    par_list.append(st.norm.rvs(size=(nwalkers, ntemps),
+                                **prior_params['Dalpha_ref']))
+    
+    # q_m
+    if fit_qm:
+        par_list.append(st.halfnorm.rvs(size=(nwalkers, ntemps),
+                                        **prior_params['q_m']))
+        
+    
+    p0 = np.array(par_list).T
+    
+    return p0
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
