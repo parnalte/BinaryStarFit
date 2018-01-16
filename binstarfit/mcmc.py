@@ -198,6 +198,7 @@ def main(ntemps, nwalkers, nburnin, niter, outchain_file, outpos_file,
     
     # Note, we do not pass a chainfile here, as we do not want to save this part
     p_burnt = _iterate_sampler(sampler=sampler, nsteps=nburnin, p0=p0)
+    sampler.reset()
     
     # And, once the chains have 'burned in', do the final run
     print("\nNow, we will run the PTSampler for %d iterations to get the final chain" % niter)
