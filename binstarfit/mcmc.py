@@ -105,6 +105,8 @@ def main(ntemps, nwalkers, nburnin, niter, outchain_file, outpos_file,
             needed ICRS positions of the Earth. Default and recommended is
             'de430'.
 
+    OUTPUT:
+        - sampler: PTSampler object, may be useful for testing purposes
             
     """
     
@@ -198,7 +200,7 @@ def main(ntemps, nwalkers, nburnin, niter, outchain_file, outpos_file,
     p_burnt = _iterate_sampler(sampler=sampler, nsteps=nburnin, p0=p0)
     
     # And, once the chains have 'burned in', do the final run
-    print("Now, we will run the PTSampler for %d iterations to get the final chain" % niter)
+    print("\nNow, we will run the PTSampler for %d iterations to get the final chain" % niter)
     
     # Add a header to the chain file
     if fit_qm:
@@ -217,7 +219,7 @@ def main(ntemps, nwalkers, nburnin, niter, outchain_file, outpos_file,
     np.save(outpos_file, pfinal)
     
     # Work is finished, output some info and basic assessment of chain
-    print("This run of the MCMC sampling has finished.")
+    print("\nThis run of the MCMC sampling has finished.")
     print("The complete chain (for T=1) has been saved to file %s" % outchain_file)
     print("The final position of the sampler (for all temps) has been saved to file %s" % outpos_file)
     print()
@@ -227,7 +229,8 @@ def main(ntemps, nwalkers, nburnin, niter, outchain_file, outpos_file,
     print("Temp-swap acceptance fraction for the different temperatures:")
     print(sampler.tswap_acceptance_fraction)
     print("****************************************************************")
-    
+
+    return sampler
     
     
 
